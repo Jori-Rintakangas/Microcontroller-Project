@@ -11,18 +11,22 @@
 
 #include "init.h"
 
-#define TRIMMER 1
-#define TERMINAL 2
+#define TRIMMER 8
+#define TERMINAL 0
 
 #define SYSTEM_OFF (PIND & (1 << PIND2)) == 0
 
-uint8_t temperature = 0;
-uint8_t temp_source = 1;
+uint8_t temperature;
+uint8_t temp_source;
 
 /* Wake up from sleep mode */
 ISR(PCINT2_vect) { }
 
-
+/* Reading the source of temperature setting */
+ISR(INT1_vect)
+{
+	temp_source = PIND & (1 << PIND3);
+}
 
 int main()
 {
@@ -31,6 +35,9 @@ int main()
 	PORTB |= (1 << PORTB0) | (1 << PORTB1) | (1 << PORTB2);
 	_delay_ms(2000);
 	PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1) & ~(1 << PORTB2);
+	
+	temp_source = PIND & (1 << PIND3);
+	
 	init_switches();
 	
     while (1) 
