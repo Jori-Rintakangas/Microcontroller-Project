@@ -5,6 +5,19 @@
 
 #include "init.h"
 
+/* Initialization of USART data transfer */
+void init_USART(unsigned int ubrr)
+{
+	// Setting USART baudrate
+	UBRR0H = (unsigned char)(ubrr >> 8);
+	UBRR0L = (unsigned char)ubrr;
+	
+	// Enabling receiver and transmitter
+	UCSR0B |= (1 << RXEN0) | (1 << TXEN0);
+		
+}
+
+
 /* Initialization of analog-to-digital converter */
 void init_ADC()
 {
@@ -20,6 +33,9 @@ void init_ADC()
 	
 	// Using Vcc 5v as reference
 	ADMUX |= ((1 << REFS0));
+	
+	// Using only high byte of the result
+	ADMUX |= (1 << ADLAR);
 	
 	// 128 as a prescaler -> 125 kHz AD-clock
 	ADCSRA |= (1 << ADPS0) | (1 << ADPS1) | (1 << ADPS2);
