@@ -5,6 +5,33 @@
 
 #include "init.h"
 
+/* Initialization of analog-to-digital converter */
+void init_ADC()
+{
+	// Setting PC0 and PC2 as input
+	DDRC &= ~(1 << DDC0) & ~(1 << DDC2);
+	
+	// Enable analog input in pins PC0 (Temperature measurement) 
+	// and PC2 (Temperature setting measurement)
+	DIDR0 |= ((1 << ADC0D) | (1 << ADC2D));
+	
+	// Set PORTC pins to 1 to minimize power consumption
+	PORTC |= ((1 << PORTC0) | (1 << PORTC2));
+	
+	// Using Vcc 5v as reference
+	ADMUX |= ((1 << REFS0));
+	
+	// 128 as a prescaler -> 125 kHz AD-clock
+	ADCSRA |= (1 << ADPS0) | (1 << ADPS1) | (1 << ADPS2);
+	
+	// Enabling AD-converter in PRR
+	PRR &= ~(1 << PRADC);
+	
+	// Enabling AD-converter in ADCSRA
+	ADCSRA |= (1 << ADEN);
+	
+}
+
 
 /* Initialization of ON/OFF and LOCAL/EXTERNAL switches */
 void init_switches()
