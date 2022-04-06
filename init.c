@@ -5,6 +5,28 @@
 
 #include "init.h"
 
+/* Initialization of PWM for heating element control */
+void init_PWM()
+{
+	// Setting PWM output pin
+	DDRD |= (1 << DDD6);
+	
+	// Setting Fast PWM mode
+	TCCR0A |= (1 << WGM01) | (1 << WGM00);
+	
+	// Setting non-inverting mode
+	TCCR0A |= (1 << COM0A1);
+	
+	// Prescaling by 256 -> 62.5kHz
+	TCCR0B |= (1 << CS02); //(1 << CS01) | (1 << CS00);
+	
+	// initialize counter
+	TCNT0 = 0;
+	// initialize compare value
+	OCR0A = 0;
+}
+
+
 /* Initialization of USART data transfer */
 void init_USART(unsigned int ubrr)
 {

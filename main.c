@@ -10,6 +10,7 @@
 #include <avr/sleep.h>
 
 #include <stdlib.h>
+#include <math.h>
 
 #include "init.h"
 
@@ -18,6 +19,9 @@
 
 #define BAUDRATE 9600
 #define UBRR F_CPU/16/BAUDRATE-1
+
+#define CONTROL 2
+#define HEATER 0
 
 
 #define SYSTEM_OFF (PIND & (1 << PIND2)) == 0
@@ -38,11 +42,11 @@ ISR(INT1_vect)
 /* Reading an analog-to-digital converter result from given channel */
 uint8_t read_ADC(uint8_t channel)
 {
-	// Selecting a channel
-	ADMUX |= channel;
+	// Selecting a channel with safety masking
+	ADMUX = (ADMUX & 0xf0) | (channel & 0x0f);
 	
 	// starting conversion
-	ADCSRA |= (1<<ADSC);
+	ADCSRA |= (1 << ADSC);
 	
 	// Waiting until conversion ready			
 	while (ADCSRA & (1 << ADSC));
@@ -63,7 +67,8 @@ int main()
 	init_switches();
 	init_ADC();
 	init_USART(UBRR);
-	
+	init_PWM();
+		
     while (1) 
     {
 		set_sleep_mode(SLEEP_MODE_PWR_DOWN); // set the power-down sleep-mode
@@ -77,6 +82,34 @@ int main()
 			sleep_disable(); // reset SE-bit
 		}
 		sei(); // enable interrupts	
+		
+		
+		// Reading selected temperature and true temperature
+		temp_setting = read_ADC(CONTROL);
+		temperature = read_ADC(HEATER);
+		
+		PORTC &= ~(1 << PORTC0);	
+		OCR0A = temp_setting;
+		
+		double set_pct = (temp_setting/255.0) * 100.0;
+		double temp_pct = (temperature/243.0) * 100.0;
+				
+		int p1 = round(set_pct);
+		int p2 = round(temp_pct);
+		
+		PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1) & ~(1 << PORTB2);
+		if (p1 <= p2 + 1 && p1 >= p2 - 1)
+		{
+			PORTB |= (1 << PORTB1);
+		}
+		else if (p1 > p2)
+		{
+			PORTB |= (1 << PORTB2);
+		}
+		else
+		{
+			PORTB |= (1 << PORTB0);
+		}		
     }
 }
 
