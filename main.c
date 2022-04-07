@@ -36,8 +36,22 @@ uint8_t setting;
 uint8_t reading;
 uint8_t temp_source;
 
-/* Wake up from sleep mode */
-ISR(PCINT2_vect) { }
+/* Entering to sleep mode by ON/OFF switch toggle */
+ISR(PCINT2_vect) 
+{	
+	if (SYSTEM_SLEEP)
+	{
+		set_sleep_mode(SLEEP_MODE_PWR_DOWN); // set the power-down sleep-mode
+		cli(); // disable interrupts
+		sleep_enable(); // set SE-bit
+		sei(); // enable interrupts
+		sleep_cpu(); // SLEEP-instruction
+		// entry-point after wake-up
+
+		sleep_disable(); // reset SE-bit
+		sei(); // enable interrupts
+	}
+}
 
 /* Reading the source of temperature setting */
 ISR(INT1_vect)
@@ -82,29 +96,23 @@ uint8_t read_ADC(uint8_t channel)
 
 int main()
 {	
+	init_switches();
+	init_USART(UBRR);
+	init_ADC();
+	init_PWM();
+	
+	sei();
 	temp_source = PIND & (1 << PIND3);
 	
-	init_switches();
-	init_ADC();
-	init_USART(UBRR);
-	init_PWM();
-		
+	if (SYSTEM_SLEEP)
+	{	
+		// Software generated interrupt to enter sleep mode
+		DDRD |= (1 << DDD2);
+		DDRD &= ~(1 << DDD2);
+	}
+	
     while (1) 
-    {
-		set_sleep_mode(SLEEP_MODE_PWR_DOWN); // set the power-down sleep-mode
-		cli(); // disable interrupts
-		if (SYSTEM_SLEEP)
-		{
-			sleep_enable(); // set SE-bit
-			sei(); // enable interrupts
-			sleep_cpu(); // SLEEP-instruction
-			// entry-point after wake-up
-			sleep_disable(); // reset SE-bit
-		}
-		sei(); // enable interrupts	
-		
-		
-		
+    {		
 		// Reading selected temperature and true temperature
 		if (temp_source == TRIMMER)
 		{
@@ -115,7 +123,6 @@ int main()
 			receive_USART();
 		}
 		
-		
 		reading = read_ADC(HEATER);
 				
 		// Setting value for PWM to control heating element
@@ -124,7 +131,7 @@ int main()
 		int setting_pct = round((setting / TEMP_MAX) * 100.0);
 		int reading_pct = round((reading / TEMP_MAX) * 100.0);
 		int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
-						
+
 		if (setting_pct <= reading_pct + diff_pct + 1
 			&& setting_pct >= reading_pct + diff_pct - 1)
 		{
@@ -140,7 +147,7 @@ int main()
 		{
 			PORTB |= (1 << PORTB0);
 			PORTB &= ~(1 << PORTB1) & ~(1 << PORTB2);
-		}		
+		}
     }
 }
 
