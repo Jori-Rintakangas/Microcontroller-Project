@@ -49,10 +49,7 @@ void init_ADC()
 	// Enable analog input in pins PC0 (Temperature measurement) 
 	// and PC2 (Temperature setting measurement)
 	DIDR0 |= ((1 << ADC0D) | (1 << ADC2D));
-	
-	// Set PORTC pins to 1 to minimize power consumption
-	PORTC |= ((1 << PORTC0) | (1 << PORTC2));
-	
+		
 	// Using Vcc 5v as reference
 	ADMUX |= ((1 << REFS0));
 	

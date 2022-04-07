@@ -23,12 +23,15 @@
 #define CONTROL 2
 #define HEATER 0
 
+#define TEMP_MAX 255.0
+#define VOLTAGE_DIV 5000.0/105000
 
-#define SYSTEM_OFF (PIND & (1 << PIND2)) == 0
 
-uint8_t temperature;
+#define SYSTEM_SLEEP (PIND & (1 << PIND2)) == 0
+
+uint8_t setting;
+uint8_t reading;
 uint8_t temp_source;
-uint8_t temp_setting;
 
 /* Wake up from sleep mode */
 ISR(PCINT2_vect) { }
@@ -73,7 +76,7 @@ int main()
     {
 		set_sleep_mode(SLEEP_MODE_PWR_DOWN); // set the power-down sleep-mode
 		cli(); // disable interrupts
-		if (SYSTEM_OFF)
+		if (SYSTEM_SLEEP)
 		{
 			sleep_enable(); // set SE-bit
 			sei(); // enable interrupts
@@ -85,24 +88,23 @@ int main()
 		
 		
 		// Reading selected temperature and true temperature
-		temp_setting = read_ADC(CONTROL);
-		temperature = read_ADC(HEATER);
-		
-		PORTC &= ~(1 << PORTC0);	
-		OCR0A = temp_setting;
-		
-		double set_pct = (temp_setting/255.0) * 100.0;
-		double temp_pct = (temperature/243.0) * 100.0;
+		setting = read_ADC(CONTROL);
+		reading = read_ADC(HEATER);
 				
-		int p1 = round(set_pct);
-		int p2 = round(temp_pct);
-		
+		// Setting value for PWM to control	heating element
+		OCR0A = setting;
+				
+		int setting_pct = round((setting / TEMP_MAX) * 100.0);
+		int reading_pct = round((reading / TEMP_MAX) * 100.0);
+		int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
+						
 		PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1) & ~(1 << PORTB2);
-		if (p1 <= p2 + 1 && p1 >= p2 - 1)
+		if (setting_pct <= reading_pct + diff_pct + 1
+			&& setting_pct >= reading_pct + diff_pct - 1)
 		{
 			PORTB |= (1 << PORTB1);
 		}
-		else if (p1 > p2)
+		else if (setting_pct > reading_pct + diff_pct)
 		{
 			PORTB |= (1 << PORTB2);
 		}
