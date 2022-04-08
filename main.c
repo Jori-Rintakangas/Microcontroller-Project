@@ -35,12 +35,16 @@
 uint8_t setting;
 uint8_t reading;
 uint8_t temp_source;
+uint8_t system_stable = 0;
+uint8_t previous_setting = 0;
 
 /* Entering to sleep mode by ON/OFF switch toggle */
 ISR(PCINT2_vect) 
 {	
 	if (SYSTEM_SLEEP)
 	{
+		system_stable = 0;
+		previous_setting = 0;
 		set_sleep_mode(SLEEP_MODE_PWR_DOWN); // set the power-down sleep-mode
 		cli(); // disable interrupts
 		sleep_enable(); // set SE-bit
@@ -94,27 +98,29 @@ uint8_t read_ADC(uint8_t channel)
 	return ADCH;
 }
 
+/* Checking the initial positions of ON/OFF and LOCAL/EXTERNAL switches */
+void check_system_state()
+{
+	// Software generated interrupt to find out ON/OFF switch position
+	DDRD |= (1 << DDD2);
+	DDRD &= ~(1 << DDD2);
+	
+	// Reading the LOCAL/EXTERNAL switch position
+	temp_source = PIND & (1 << PIND3);
+}
+
 int main()
 {	
 	init_switches();
 	init_USART(UBRR);
 	init_ADC();
 	init_PWM();
-	
 	sei();
-	temp_source = PIND & (1 << PIND3);
+	check_system_state();
 	
-	if (SYSTEM_SLEEP)
-	{	
-		// Software generated interrupt to enter sleep mode
-		DDRD |= (1 << DDD2);
-		DDRD &= ~(1 << DDD2);
-	}
-	uint8_t system_stable = 0;
-	uint8_t previous_setting = 0;
     while (1) 
     {		
-		// Reading selected temperature and true temperature
+		// Selecting temperature source
 		if (temp_source == TRIMMER)
 		{
 			setting = read_ADC(CONTROL);
@@ -123,7 +129,6 @@ int main()
 		{	
 			receive_USART();
 		}
-		
 				
 		if (!(previous_setting == setting) || !system_stable)
 		{
