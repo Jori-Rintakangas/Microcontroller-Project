@@ -110,7 +110,8 @@ int main()
 		DDRD |= (1 << DDD2);
 		DDRD &= ~(1 << DDD2);
 	}
-	
+	uint8_t system_stable = 0;
+	uint8_t previous_setting = 0;
     while (1) 
     {		
 		// Reading selected temperature and true temperature
@@ -123,31 +124,39 @@ int main()
 			receive_USART();
 		}
 		
-		reading = read_ADC(HEATER);
 				
-		// Setting value for PWM to control heating element
-		OCR0A = setting;
-				
-		int setting_pct = round((setting / TEMP_MAX) * 100.0);
-		int reading_pct = round((reading / TEMP_MAX) * 100.0);
-		int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
+		if (!(previous_setting == setting) || !system_stable)
+		{
+			// Setting value for PWM to control heating element
+			OCR0A = setting;
+					
+			reading = read_ADC(HEATER);
+					
+			int setting_pct = round((setting / TEMP_MAX) * 100.0);
+			int reading_pct = round((reading / TEMP_MAX) * 100.0);
+			int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
 
-		if (setting_pct <= reading_pct + diff_pct + 1
+			if (setting_pct <= reading_pct + diff_pct + 1
 			&& setting_pct >= reading_pct + diff_pct - 1)
-		{
-			PORTB |= (1 << PORTB1);
-			PORTB &= ~(1 << PORTB0) & ~(1 << PORTB2);
-		}
-		else if (setting_pct > reading_pct + diff_pct)
-		{
-			PORTB |= (1 << PORTB2);
-			PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1);
-		}
-		else
-		{
-			PORTB |= (1 << PORTB0);
-			PORTB &= ~(1 << PORTB1) & ~(1 << PORTB2);
-		}
+			{
+				PORTB |= (1 << PORTB1);
+				PORTB &= ~(1 << PORTB0) & ~(1 << PORTB2);
+				previous_setting = setting;
+				system_stable = 1;
+			}
+			else if (setting_pct > reading_pct + diff_pct)
+			{
+				PORTB |= (1 << PORTB2);
+				PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1);
+				system_stable = 0;
+			}
+			else
+			{
+				PORTB |= (1 << PORTB0);
+				PORTB &= ~(1 << PORTB1) & ~(1 << PORTB2);
+				system_stable = 0;
+			}
+		}		
     }
 }
 
