@@ -36,7 +36,7 @@ uint8_t setting;
 uint8_t reading;
 uint8_t temp_source;
 uint8_t system_stable = 0;
-uint8_t previous_setting = 0;
+uint8_t previous_stable_setting = 0;
 
 int buff_index = 0;
 char buffer[BUFFER_SIZE];
@@ -48,8 +48,7 @@ void power_down()
 {
 	if (SYSTEM_SLEEP)
 	{
-		system_stable = 0;
-		previous_setting = 0;
+		previous_stable_setting = 0;
 
 		// Turning off LEDs
 		PORTB &= ~(1 << PORTB1) & ~(1 << PORTB0) & ~(1 << PORTB2);
@@ -67,6 +66,7 @@ void power_down()
 		sleep_disable(); // reset SE-bit
 		sei();
 		
+		PORTB |= (1 << PORTB1);
 		// Enabling AD-converter
 		ADCSRA |= (1 << ADEN);
 		// Enabling functional blocks after wake up
@@ -126,6 +126,37 @@ void check_system_state()
 	temp_source = PIND & (1 << PIND3);
 }
 
+/* Adjusting temperature and turning on LEDs accordingly */
+void adjust_temperature()
+{
+	// Setting value for PWM to control heating element
+	OCR0A = setting;
+				
+	reading = read_ADC(HEATER);
+				
+	int setting_pct = round((setting / TEMP_MAX) * 100.0);
+	int reading_pct = round((reading / TEMP_MAX) * 100.0);
+	int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
+
+	if (setting_pct <= reading_pct + diff_pct + 1
+	 && setting_pct >= reading_pct + diff_pct - 1)
+	{
+		PORTB |= (1 << PORTB1);
+		PORTB &= ~(1 << PORTB0) & ~(1 << PORTB2);
+		previous_stable_setting = setting;
+	}
+	else if (setting_pct > reading_pct + diff_pct)
+	{
+		PORTB |= (1 << PORTB2);
+		PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1);
+	}
+	else
+	{
+		PORTB |= (1 << PORTB0);
+		PORTB &= ~(1 << PORTB1) & ~(1 << PORTB2);
+	}
+}
+
 int main()
 {	
 	init_switches();
@@ -143,37 +174,13 @@ int main()
 			setting = read_ADC(CONTROL);
 		}
 				
-		if (!(previous_setting == setting) || !system_stable)
+		if (previous_stable_setting != setting)
 		{
-			// Setting value for PWM to control heating element
-			OCR0A = setting;
-					
-			reading = read_ADC(HEATER);
-					
-			int setting_pct = round((setting / TEMP_MAX) * 100.0);
-			int reading_pct = round((reading / TEMP_MAX) * 100.0);
-			int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
-
-			if (setting_pct <= reading_pct + diff_pct + 1
-			 && setting_pct >= reading_pct + diff_pct - 1)
-			{
-				PORTB |= (1 << PORTB1);
-				PORTB &= ~(1 << PORTB0) & ~(1 << PORTB2);
-				previous_setting = setting;
-				system_stable = 1;
-			}
-			else if (setting_pct > reading_pct + diff_pct)
-			{
-				PORTB |= (1 << PORTB2);
-				PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1);
-				system_stable = 0;
-			}
-			else
-			{
-				PORTB |= (1 << PORTB0);
-				PORTB &= ~(1 << PORTB1) & ~(1 << PORTB2);
-				system_stable = 0;
-			}
+			adjust_temperature();
+		}
+		else
+		{
+			// standby mode
 		}		
     }
 }
