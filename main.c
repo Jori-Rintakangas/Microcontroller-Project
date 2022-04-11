@@ -38,6 +38,9 @@ uint8_t temp_source;
 uint8_t system_stable = 0;
 uint8_t previous_setting = 0;
 
+int buff_index = 0;
+char buffer[BUFFER_SIZE];
+
 /* Entering to sleep mode by ON/OFF switch toggle */
 ISR(PCINT2_vect) 
 {	
@@ -63,23 +66,17 @@ ISR(INT1_vect)
 	temp_source = PIND & (1 << PIND3);
 }
 
-/* Reading temperature setting send by virtual terminal */
-void receive_USART()
+/* Reading temperature setting from virtual terminal */
+ISR(USART_RX_vect)
 {
-	if (NEW_SETTING_RECEIVED)
+	char c = UDR0;
+	buffer[buff_index] = c;
+	buff_index++;
+	
+	if (c == ENTER_KEY)
 	{
-		int i = 0;
-		char buffer[BUFFER_SIZE];
-		char c = '\0';
-		while (c != ENTER_KEY) // Receive characters until enter pressed
-		{
-			// Wait until data receiving is ready
-			while ( !(UCSR0A & (1 << RXC0)));
-			c = UDR0;
-			buffer[i] = c;
-			i++;
-		}
 		setting = atoi(buffer);
+		buff_index = 0;
 	}
 }
 
@@ -124,10 +121,6 @@ int main()
 		if (temp_source == TRIMMER)
 		{
 			setting = read_ADC(CONTROL);
-		}
-		else
-		{	
-			receive_USART();
 		}
 				
 		if (!(previous_setting == setting) || !system_stable)
