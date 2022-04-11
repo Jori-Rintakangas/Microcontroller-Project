@@ -41,23 +41,43 @@ uint8_t previous_setting = 0;
 int buff_index = 0;
 char buffer[BUFFER_SIZE];
 
-/* Entering to sleep mode by ON/OFF switch toggle */
-ISR(PCINT2_vect) 
-{	
+
+
+/* System power down mode */
+void power_down()
+{
 	if (SYSTEM_SLEEP)
 	{
 		system_stable = 0;
 		previous_setting = 0;
-		set_sleep_mode(SLEEP_MODE_PWR_DOWN); // set the power-down sleep-mode
-		cli(); // disable interrupts
-		sleep_enable(); // set SE-bit
-		sei(); // enable interrupts
-		sleep_cpu(); // SLEEP-instruction
-		// entry-point after wake-up
 
+		// Turning off LEDs
+		PORTB &= ~(1 << PORTB1) & ~(1 << PORTB0) & ~(1 << PORTB2);
+		// Disabling AD-converter
+		ADCSRA &= ~(1 << ADEN);
+		// Disabling functional blocks during the sleep
+		PRR |= (1 << PRTIM0) | (1 << PRTIM2) | (1 << PRADC);
+		
+		set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+		cli();
+		sleep_enable(); // set SE-bit
+		sei();
+		sleep_cpu();
+		// Wake up point
 		sleep_disable(); // reset SE-bit
-		sei(); // enable interrupts
+		sei();
+		
+		// Enabling AD-converter
+		ADCSRA |= (1 << ADEN);
+		// Enabling functional blocks after wake up
+		PRR &= ~(1 << PRTIM0) & ~(1 << PRTIM2) & ~(1 << PRADC);
 	}
+}
+
+/* Entering to sleep mode by ON/OFF switch toggle */
+ISR(PCINT2_vect) 
+{	
+	power_down();
 }
 
 /* Reading the source of temperature setting */
@@ -114,7 +134,7 @@ int main()
 	init_PWM();
 	sei();
 	check_system_state();
-	
+	DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2);
     while (1) 
     {		
 		// Selecting temperature source
@@ -135,7 +155,7 @@ int main()
 			int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
 
 			if (setting_pct <= reading_pct + diff_pct + 1
-			&& setting_pct >= reading_pct + diff_pct - 1)
+			 && setting_pct >= reading_pct + diff_pct - 1)
 			{
 				PORTB |= (1 << PORTB1);
 				PORTB &= ~(1 << PORTB0) & ~(1 << PORTB2);

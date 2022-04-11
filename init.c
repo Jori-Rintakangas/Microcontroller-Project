@@ -64,6 +64,9 @@ void init_ADC()
 	// Enabling AD-converter in ADCSRA
 	ADCSRA |= (1 << ADEN);
 	
+	// Disabling analog comparator for power reduction
+	ACSR |= (1 << ACD);
+	
 }
 
 
