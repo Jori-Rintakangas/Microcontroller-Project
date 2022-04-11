@@ -18,7 +18,7 @@ void init_PWM()
 	TCCR0A |= (1 << COM0A1);
 	
 	// Prescaling by 256 -> 62.5kHz
-	TCCR0B |= (1 << CS02); //(1 << CS01) | (1 << CS00);
+	TCCR0B |= (1 << CS02);
 	
 	// initialize counter
 	TCNT0 = 0;
@@ -90,4 +90,11 @@ void init_switches()
 	
 	// Enabling INT1 interrupt
 	EIMSK |= (1 << INT1);
+}
+
+/* Initialization of timer2 used to wake up from idle sleep mode */
+void init_timer2()
+{
+	// 1024 as prescaler -> 15.6 kHz timer clock -> overflow in 16 ms
+	TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);
 }

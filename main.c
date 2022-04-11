@@ -157,15 +157,41 @@ void adjust_temperature()
 	}
 }
 
+/* Going to idle mode, waking up after 16 ms */
+void idle_mode()
+{
+	// Enabling timer2 interrupts
+	TIMSK2 |= (1 << TOIE2);
+	TCNT2 = 0;
+	set_sleep_mode(SLEEP_MODE_IDLE);
+	cli();
+	sleep_enable(); // set SE-bit
+	sei();
+	sleep_cpu();
+	// Wake up point
+	sleep_disable(); // reset SE-bit
+}
+
+/* Waking up from idle mode */
+ISR(TIMER2_OVF_vect)
+{
+	// Disabling timer2 interrupts
+	TIMSK2 &= ~(1 << TOIE2);
+}
+
 int main()
 {	
+	// LED pins as output
+	DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2);
+	sei();
+	
 	init_switches();
 	init_USART(UBRR);
 	init_ADC();
 	init_PWM();
-	sei();
+	init_timer2();
 	check_system_state();
-	DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2);
+	
     while (1) 
     {		
 		// Selecting temperature source
@@ -180,7 +206,7 @@ int main()
 		}
 		else
 		{
-			// standby mode
+			idle_mode();
 		}		
     }
 }

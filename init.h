@@ -15,6 +15,8 @@ void init_ADC();
 
 void init_switches();
 
+void init_timer2();
+
 
 
 #endif /* INIT_H_ */
