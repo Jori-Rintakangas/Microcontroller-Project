@@ -1,4 +1,10 @@
-/*
+/* Program autohor: Jori Rintakangas
+ *
+ * This program reads voltage setting percent from a potentiometer 
+ * or a virtual terminal. It applies voltage on parallel RC-circuit 
+ * using pulse width modulation according to the voltage setting. 
+ * It measures the voltage over parallel RC-circuit and turns on and off
+ * three LEDs according to the relation of setting and measured voltage.
  * 
  */ 
 
@@ -7,7 +13,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
-
 #include <stdlib.h>
 #include <math.h>
 
@@ -35,31 +40,32 @@
 					 PORTB &= ~0x03;
 
 #define SYSTEM_SLEEP (PIND & (1 << PIND2)) == 0
+#define DISABLE_BLOCKS() PRR |= (1 << PRTIM0) | (1 << PRTIM2) | (1 << PRADC)
+#define ENABLE_BLOCKS() PRR &= ~(1 << PRTIM0) & ~(1 << PRTIM2) & ~(1 << PRADC)
+#define LEDS_OFF() PORTB &= ~(1 << PORTB1) & ~(1 << PORTB0) & ~(1 << PORTB2);
 
-uint8_t setting = 0;
 uint8_t reading = 0;
-uint8_t buff_index = 0;
-uint8_t temp_source = 0;
-uint8_t system_stable = 0;
-uint8_t previous_stable_setting = 0;
+volatile uint8_t source = 0;
+volatile uint8_t setting = 0;
+volatile uint8_t buff_index = 0;
+volatile uint8_t previous_stable_setting = 0;
 
-char buffer[BUFFER_SIZE];
+volatile char buffer[BUFFER_SIZE];
 
-
-/* System power down mode */
-void power_down()
-{
+/* Entering to sleep mode by ON/OFF switch toggle */
+ISR(PCINT2_vect) 
+{	
 	if (SYSTEM_SLEEP)
 	{
 		previous_stable_setting = 0;
 
 		// Turning off LEDs
-		PORTB &= ~(1 << PORTB1) & ~(1 << PORTB0) & ~(1 << PORTB2);
+		LEDS_OFF();
 		// Disabling AD-converter
 		ADCSRA &= ~(1 << ADEN);
 		// Disabling functional blocks during the sleep
-		PRR |= (1 << PRTIM0) | (1 << PRTIM2) | (1 << PRADC);
-		
+		DISABLE_BLOCKS();
+			
 		set_sleep_mode(SLEEP_MODE_PWR_DOWN);
 		cli();
 		sleep_enable(); // set SE-bit
@@ -68,25 +74,26 @@ void power_down()
 		// Wake up point
 		sleep_disable(); // reset SE-bit
 		sei();
-		
+			
 		PORTB |= (1 << PORTB1);
 		// Enabling AD-converter
 		ADCSRA |= (1 << ADEN);
 		// Enabling functional blocks after wake up
-		PRR &= ~(1 << PRTIM0) & ~(1 << PRTIM2) & ~(1 << PRADC);
+		ENABLE_BLOCKS();
 	}
 }
 
-/* Entering to sleep mode by ON/OFF switch toggle */
-ISR(PCINT2_vect) 
-{	
-	power_down();
+/* Waking up from idle mode */
+ISR(TIMER2_OVF_vect)
+{
+	// Disabling timer2 interrupts
+	TIMSK2 &= ~(1 << TOIE2);
 }
 
 /* Reading the source of temperature setting */
 ISR(INT1_vect)
 {
-	temp_source = PIND & (1 << PIND3);
+	source = PIND & (1 << PIND3);
 }
 
 /* Reading temperature setting from virtual terminal */
@@ -100,7 +107,7 @@ ISR(USART_RX_vect)
 	// Reading the temperature setting from buffer when enter pressed
 	if (c == ENTER_KEY)
 	{
-		setting = atoi(buffer);
+		setting = round(atoi(buffer) * (TEMP_MAX / 100.0));
 		buff_index = 0;
 	}
 }
@@ -111,7 +118,7 @@ uint8_t read_ADC(uint8_t channel)
 	// Selecting a channel with safety masking
 	ADMUX = (ADMUX & 0xf0) | (channel & 0x0f);
 	
-	// starting conversion
+	// Starting conversion
 	ADCSRA |= (1 << ADSC);
 	
 	// Waiting until conversion ready			
@@ -123,12 +130,12 @@ uint8_t read_ADC(uint8_t channel)
 /* Checking the initial positions of ON/OFF and LOCAL/EXTERNAL switches */
 void check_system_state()
 {
-	// Software generated interrupt to find out ON/OFF switch position
+	// Software generated interrupt to go to the sleep mode if needed
 	DDRD |= (1 << DDD2);
 	DDRD &= ~(1 << DDD2);
 	
 	// Reading the LOCAL/EXTERNAL switch position
-	temp_source = PIND & (1 << PIND3);
+	source = PIND & (1 << PIND3);
 }
 
 /* Adjusting temperature and turning on LEDs accordingly */
@@ -141,9 +148,9 @@ void adjust_temperature()
 	reading = read_ADC(HEATER);
 	
 	// Calculating percentages of voltages	
-	int setting_pct = round((setting / TEMP_MAX) * 100.0);
-	int reading_pct = round((reading / TEMP_MAX) * 100.0);
-	int drop_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
+	uint8_t setting_pct = round((setting / TEMP_MAX) * 100.0);
+	uint8_t reading_pct = round((reading / TEMP_MAX) * 100.0);
+	uint8_t drop_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
 
 	// If setting is within 1% of reading + drop over 5k resistor
 	if (setting_pct <= reading_pct + drop_pct + 1
@@ -167,6 +174,7 @@ void idle_mode()
 {
 	// Enabling timer2 interrupts
 	TIMSK2 |= (1 << TOIE2);
+	// Initializing counter
 	TCNT2 = 0;
 	set_sleep_mode(SLEEP_MODE_IDLE);
 	cli();
@@ -175,13 +183,6 @@ void idle_mode()
 	sleep_cpu();
 	// Wake up point
 	sleep_disable(); // reset SE-bit
-}
-
-/* Waking up from idle mode */
-ISR(TIMER2_OVF_vect)
-{
-	// Disabling timer2 interrupts
-	TIMSK2 &= ~(1 << TOIE2);
 }
 
 int main()
@@ -199,18 +200,18 @@ int main()
 	
     while (1) 
     {		
-		if (temp_source == POTENTIOMETER)
+		if (source == POTENTIOMETER)
 		{
 			setting = read_ADC(CONTROL);
 		}
-				
-		if (previous_stable_setting != setting)
+	
+		if (previous_stable_setting == setting)
 		{
-			adjust_temperature();
+			idle_mode();
 		}
 		else
 		{
-			idle_mode();
+			adjust_temperature();
 		}		
     }
 }

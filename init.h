@@ -1,4 +1,4 @@
-/*
+/* Program author: Jori Rintakangas
  *
  */ 
 
@@ -16,7 +16,6 @@ void init_ADC();
 void init_switches();
 
 void init_idle_timer();
-
 
 
 #endif /* INIT_H_ */

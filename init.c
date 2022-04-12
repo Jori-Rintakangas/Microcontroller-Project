@@ -1,5 +1,6 @@
-/*
- * 
+/* Program author: Jori Rintakangas
+ *
+ * The file includes the initializations of functional blocks
  */
 
 
@@ -91,6 +92,7 @@ void init_switches()
 	// Enabling INT1 interrupt
 	EIMSK |= (1 << INT1);
 }
+
 
 /* Initialization of timer2 used to wake up from idle sleep mode */
 void init_idle_timer()
