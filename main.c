@@ -5,7 +5,6 @@
 #define F_CPU 16e6
 
 #include <avr/io.h>
-#include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 
@@ -14,8 +13,7 @@
 
 #include "init.h"
 
-#define TRIMMER 8
-#define TERMINAL 0
+#define POTENTIOMETER 8
 
 #define BAUDRATE 9600
 #define UBRR F_CPU/16/BAUDRATE-1
@@ -29,18 +27,23 @@
 #define ENTER_KEY 13
 #define BUFFER_SIZE 4
 
-#define SYSTEM_SLEEP (PIND & (1 << PIND2)) == 0
-#define NEW_SETTING_RECEIVED (UCSR0A & (1 << RXC0)) != 0
+#define GREEN_LED_ON() PORTB |= 0x02;\
+					   PORTB &= ~0x05;
+#define BLUE_LED_ON() PORTB |= 0x01;\
+					  PORTB &= ~0x06;
+#define RED_LED_ON() PORTB |= 0x04;\
+					 PORTB &= ~0x03;
 
-uint8_t setting;
-uint8_t reading;
-uint8_t temp_source;
+#define SYSTEM_SLEEP (PIND & (1 << PIND2)) == 0
+
+uint8_t setting = 0;
+uint8_t reading = 0;
+uint8_t buff_index = 0;
+uint8_t temp_source = 0;
 uint8_t system_stable = 0;
 uint8_t previous_stable_setting = 0;
 
-int buff_index = 0;
 char buffer[BUFFER_SIZE];
-
 
 
 /* System power down mode */
@@ -89,10 +92,12 @@ ISR(INT1_vect)
 /* Reading temperature setting from virtual terminal */
 ISR(USART_RX_vect)
 {
+	// Reading a single character from USART to buffer
 	char c = UDR0;
 	buffer[buff_index] = c;
 	buff_index++;
 	
+	// Reading the temperature setting from buffer when enter pressed
 	if (c == ENTER_KEY)
 	{
 		setting = atoi(buffer);
@@ -131,29 +136,29 @@ void adjust_temperature()
 {
 	// Setting value for PWM to control heating element
 	OCR0A = setting;
-				
+	
+	// Reading temperature value from heating element			
 	reading = read_ADC(HEATER);
-				
+	
+	// Calculating percentages of voltages	
 	int setting_pct = round((setting / TEMP_MAX) * 100.0);
 	int reading_pct = round((reading / TEMP_MAX) * 100.0);
-	int diff_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
+	int drop_pct = round(VOLTAGE_DIV * (setting / TEMP_MAX) * 100.0);
 
-	if (setting_pct <= reading_pct + diff_pct + 1
-	 && setting_pct >= reading_pct + diff_pct - 1)
+	// If setting is within 1% of reading + drop over 5k resistor
+	if (setting_pct <= reading_pct + drop_pct + 1
+	 && setting_pct >= reading_pct + drop_pct - 1)
 	{
-		PORTB |= (1 << PORTB1);
-		PORTB &= ~(1 << PORTB0) & ~(1 << PORTB2);
+		GREEN_LED_ON();
 		previous_stable_setting = setting;
 	}
-	else if (setting_pct > reading_pct + diff_pct)
+	else if (setting_pct > reading_pct + drop_pct)
 	{
-		PORTB |= (1 << PORTB2);
-		PORTB &= ~(1 << PORTB0) & ~(1 << PORTB1);
+		RED_LED_ON();
 	}
 	else
 	{
-		PORTB |= (1 << PORTB0);
-		PORTB &= ~(1 << PORTB1) & ~(1 << PORTB2);
+		BLUE_LED_ON();
 	}
 }
 
@@ -181,7 +186,7 @@ ISR(TIMER2_OVF_vect)
 
 int main()
 {	
-	// LED pins as output
+	// Setting LED pins as output
 	DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2);
 	sei();
 	
@@ -189,13 +194,12 @@ int main()
 	init_USART(UBRR);
 	init_ADC();
 	init_PWM();
-	init_timer2();
+	init_idle_timer();
 	check_system_state();
 	
     while (1) 
     {		
-		// Selecting temperature source
-		if (temp_source == TRIMMER)
+		if (temp_source == POTENTIOMETER)
 		{
 			setting = read_ADC(CONTROL);
 		}

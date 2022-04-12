@@ -15,7 +15,7 @@ void init_ADC();
 
 void init_switches();
 
-void init_timer2();
+void init_idle_timer();
 
 
 

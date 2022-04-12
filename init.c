@@ -93,7 +93,7 @@ void init_switches()
 }
 
 /* Initialization of timer2 used to wake up from idle sleep mode */
-void init_timer2()
+void init_idle_timer()
 {
 	// 1024 as prescaler -> 15.6 kHz timer clock -> overflow in 16 ms
 	TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);
